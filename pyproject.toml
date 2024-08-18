@@ -11,6 +11,13 @@ torch = "^2.4.0"
 numpy = "^2.0.1"
 
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+click = "^8.1.7"
+
+[tool.poetry.scripts]
+test-cli = "etude_moe.cli:cli"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

@@ -69,8 +69,6 @@ def chunk(hidden_states, window_overlap):
         window_overlap * 2,
         hidden_states.size(2),
     ]
-    import pdb  # P4T
-    pdb.set_trace()  # P4T
 
     overlapping_chunks = torch.empty(chunk_size, device=hidden_states.device)
     for chunk in range(chunk_size[1]):

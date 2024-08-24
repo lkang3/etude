@@ -1,9 +1,9 @@
 import torch
 
-from moe.attention import chunk
-from moe.attention import calculate_slide_window_attention_scores
-from moe.attention import AttentionScores
-from moe.attention import SlideWindowAttention
+from attentions.models import chunk
+from attentions.models import calculate_slide_window_attention_scores
+from attentions.models import AttentionScores
+from attentions.models import SlideWindowAttention
 
 
 torch.manual_seed(123)

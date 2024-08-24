@@ -2,14 +2,14 @@ import click
 
 import torch.nn as nn
 
-from etude_moe.models import get_classification_accuracy
-from etude_moe.data_generation import multiclass_data
+from moe.models import get_classification_accuracy
+from moe.data_generation import multiclass_data
 
-from etude_moe.models import Expert
-from etude_moe.models import Gate
-from etude_moe.models import MoETopX
-from etude_moe.models import MoEWeightedAverage
-from etude_moe.models import Trainer
+from moe.models import Expert
+from moe.models import Gate
+from moe.models import MoETopX
+from moe.models import MoEWeightedAverage
+from moe.models import Trainer
 
 
 @click.group()

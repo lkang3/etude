@@ -3,12 +3,12 @@ import pytest
 import torch
 from torch import Tensor
 
-from etude_moe.models import Expert
-from etude_moe.models import ExpertLayer
-from etude_moe.models import Gate
-from etude_moe.models import GateLayer
-from etude_moe.models import MoE
-from etude_moe.models import MoeLayer
+from moe.models import Expert
+from moe.models import ExpertLayer
+from moe.models import Gate
+from moe.models import GateLayer
+from moe.models import MoE
+from moe.models import MoeLayer
 
 
 torch.manual_seed(123)

@@ -62,53 +62,6 @@ class Trainer:
         return loss, accuracy
 
 
-class ExpertLayer(nn.Module):
-    def __init__(self, n_embed: int, dropout: int = 0.0):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(n_embed, 4 * n_embed),
-            nn.ReLU(),
-            nn.Linear(4 * n_embed, n_embed),
-            nn.Dropout(dropout)
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-
-class GateLayer(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int):
-        super().__init__()
-        self.net = nn.Linear(in_dim, out_dim, bias=False)
-
-    def forward(self, x):
-        return self.net(x)
-
-
-class MoeLayer(nn.Module):
-    def __init__(self, experts: List[nn.Module], gate, top_k=1):
-        super().__init__()
-        self.experts = nn.ModuleList(experts)
-        self.gate = gate
-        self.k = top_k
-
-    def forward(self, inputs: torch.Tensor):
-        inputs_squashed = inputs.view(-1, inputs.shape[-1])
-        gate_logits = self.gate(inputs_squashed)
-        weights, selected_experts = torch.topk(gate_logits, self.k)
-        weights = nn.functional.softmax(
-            weights,
-            dim=1,
-            dtype=torch.float,
-        ).type_as(inputs)
-        results = torch.zeros_like(inputs_squashed)
-        for i, expert in enumerate(self.experts):
-            batch_idx, nth_expert = torch.where(selected_experts == i)
-            results[batch_idx] += weights[batch_idx, nth_expert, None] * expert(inputs_squashed[batch_idx])
-        return results.view_as(inputs)
-
-
-
 class Expert(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, dropout: int = 0.02):
         super().__init__()
@@ -143,33 +96,30 @@ class Gate(nn.Module):
 class MoE(nn.Module):
     def __init__(
         self,
-        experts: List[nn.Module],
+        experts: List[Expert],
         gate: nn.Module,
-        in_dim: int,
-        out_dim: int,
         freeze_expert: bool = False,
     ):
         super().__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim
         if freeze_expert:
             for expert in experts:
                 for param in expert.parameters():
                     param.requires_grad = False
         self.experts = nn.ModuleList(experts)
+        self.out_dim = self.experts[0].out_dim
         self.gate = gate
 
     @abstractmethod
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        :param inputs: (num_of_tokens, embedding_size)
+        :return: (num_of_tokens, output_embedding_size)
+        """
         raise NotImplemented()
 
 
 class MoEWeightedAverage(MoE):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        :param inputs: (num_of_tokens, size_embeddings)
-        :return:
-        """
         weights = self.gate(inputs)
         outputs = torch.stack([expert(inputs) for expert in self.experts], dim=-1)
         weights = weights.unsqueeze(1).expand_as(outputs)
@@ -180,23 +130,26 @@ class MoEWeightedAverage(MoE):
 class MoETopX(MoE):
     def __init__(
         self,
-        experts: List[nn.Module],
+        experts: List[Expert],
         gate: nn.Module,
-        in_dim: int,
-        out_dim: int,
-        top_x: int = 2,
         freeze_expert: bool = False,
+        top_x: int = 2,
     ):
-        super().__init__(experts, gate, in_dim, out_dim, freeze_expert)
+        super().__init__(experts, gate, freeze_expert)
         self.top_x = top_x
 
+    @staticmethod
+    def get_weights_of_top_experts(
+        weights: torch.Tensor,
+        top_x: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        top_expert_weights, top_expert_indices = torch.topk(weights, top_x)
+        top_expert_weights = torch.softmax(top_expert_weights, dim=-1)
+        return top_expert_weights, top_expert_indices
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        :param inputs: (num_of_tokens, size_embeddings)
-        :return:
-        """
         weights = self.gate(inputs)
-        weights, top_expert_indices = torch.topk(weights, self.top_x)
+        weights, top_expert_indices = self.get_weights_of_top_experts(weights, self.top_x)
         weights = torch.softmax(weights, dim=-1)
 
         outputs = torch.zeros((inputs.shape[0], self.out_dim))

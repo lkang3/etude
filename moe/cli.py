@@ -54,7 +54,7 @@ def test_moe_avg() -> None:
     # train moe
     gate_activate_layer = nn.ReLU()
     gate = Gate(embedding_size, num_of_experts, gate_activate_layer)
-    moe = MoEWeightedAverage(experts, gate, embedding_size, output_dim, freeze_expert=True)
+    moe = MoEWeightedAverage(experts, gate, freeze_expert=True)
     moe_trainer = Trainer(moe, loss_func, accuracy_func, learning_rate, epoches, batch_size)
     moe_trainer.train(train_moe_data_x, train_moe_data_y)
 
@@ -66,9 +66,7 @@ def test_moe_avg() -> None:
     print(f"moe - cross entropy {loss}, accuracy: {accuracy}")
 
 
-    moe = MoETopX(
-        experts, gate, embedding_size, output_dim, top_x=2, freeze_expert=True,
-    )
+    moe = MoETopX(experts, gate, top_x=2, freeze_expert=True)
     moe_trainer = Trainer(moe, loss_func, accuracy_func, learning_rate, epoches, batch_size)
     moe_trainer.train(train_moe_data_x, train_moe_data_y)
     for idx, trainer in enumerate(expert_trainers):

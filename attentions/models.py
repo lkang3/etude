@@ -82,44 +82,6 @@ def chunk(hidden_states, window_overlap):
     return overlapping_chunks
 
 
-def calculate_slide_window_attention_scores(
-    k: torch.Tensor,
-    q: torch.Tensor,
-    window_size: int,
-) -> List[AttentionScores]:
-    """
-    :param k:
-    :param q:
-    :param window_size:
-    :return:
-    """
-    assert k.shape[-1] == q.shape[-1]
-    embedding_size = k.shape[-1]
-    source_token_size = k.shape[-2]
-    target_token_size = q.shape[-2]
-
-    attention_scores = []
-    for token_idx in range(target_token_size):
-        chunk_start_idx = token_idx - window_size if token_idx > window_size else min(0, token_idx)
-        chunk_end_idx = (
-            token_idx + window_size + 1
-            if token_idx + window_size + 1 < source_token_size
-            else min(source_token_size, token_idx + window_size + 1)
-        )
-        scores = q[token_idx, :] @ k[chunk_start_idx: chunk_end_idx, :].T
-        scores = scores * embedding_size ** -0.5
-        scores = torch.softmax(scores, dim=-1)
-        attention_scores.append(
-            AttentionScores(
-                token_idx,
-                list(range(chunk_start_idx, chunk_start_idx + len(scores))),
-                scores,
-            )
-        )
-
-    return attention_scores
-
-
 class BaseAttention(nn.Module):
     def __init__(
         self,

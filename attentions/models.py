@@ -9,78 +9,22 @@ from attentions.entity import AttentionScores
 from attentions.enum import AttentionDirection
 
 
-class Head(nn.Module):
-    def __init__(
-        self,
-        embedding_size: int,
-        head_size: int,
-        dropout: float = 0.01,
-    ):
-        super().__init__()
-        self.embedding_size = embedding_size
-        self.key_weights = nn.Linear(embedding_size, head_size, bias=False)
-        self.query_weights = nn.Linear(embedding_size, head_size, bias=False)
-        self.value_weights = nn.Linear(embedding_size, head_size, bias=False)
-
-        self.dropout = nn.Dropout(dropout)
-
-    def scale_attention_scores(self, attention_scores: torch.Tensor) -> torch.Tensor:
-        return attention_scores * self.embedding_size ** -0.5
-
-    @staticmethod
-    def mask_attention_scores(attention_scores: torch.Tensor) -> torch.Tensor:
-        mask = torch.tril(torch.ones_like(attention_scores))
-        return torch.masked_fill(attention_scores, mask, float("-inf"))
-
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        k = self.key_weights(inputs)
-        q = self.query_weights(inputs)
-        v = self.value_weights(inputs)
-        attention_scores = q @ k.transpose(-2, -1)
-        attention_scores = self.scale_attention_scores(attention_scores)
-        attention_scores = self.mask_attention_scores(attention_scores)
-        attention_scores = nn.functional.softmax(attention_scores, dim=-1)
-        attention_scores = self.dropout(attention_scores)
-        outputs = attention_scores @ v
-        return outputs
-
-
-class MulitHeadAttention(nn.Module):
-    def __init__(
-        self,
-        embedding_size: int,
-        head_size: int,
-        dropout: float = 0.01,
-    ):
-        super().__init__()
-        num_of_heads = embedding_size / head_size
-        self.heads = nn.ModuleList([Head(embedding_size, head_size) for _ in range(num_of_heads)])
-        self.linear = nn.Linear(embedding_size, embedding_size)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        inputs =  torch.cat([head(inputs) for head in self.heads], dim=-1)
-        out = self.dropout(self.linear(inputs))
-        return out
-
-
 class BaseAttention(nn.Module):
     def __init__(
         self,
         embedding_size: int,
-        weight_embedding_size: int,
+        output_embedding_size: int,
         source_sequence_size: int,
         query_sequence_size: int,
         add_bias: bool = True,
         attention_schema: AttentionSchema = AttentionSchema(AttentionDirection.BOTH),
     ):
         super().__init__()
-        self.key_weights = nn.Linear(embedding_size, weight_embedding_size, bias=add_bias)
-        self.query_weights = nn.Linear(embedding_size, weight_embedding_size, bias=add_bias)
-        self.value_weights = nn.Linear(embedding_size, weight_embedding_size, bias=add_bias)
+        self.key_weights = nn.Linear(embedding_size, output_embedding_size, bias=add_bias)
+        self.query_weights = nn.Linear(embedding_size, output_embedding_size, bias=add_bias)
+        self.value_weights = nn.Linear(embedding_size, output_embedding_size, bias=add_bias)
         self.embedding_size = embedding_size
-        self.weight_embedding_size = weight_embedding_size
+        self.output_embedding_size = output_embedding_size
         self.source_sequence_size = source_sequence_size
         self.query_sequence_size = query_sequence_size
         self.attention_schema = attention_schema
@@ -129,14 +73,14 @@ class VanillaAttentionForEncoder(BaseAttention):
     def __init__(
         self,
         embedding_size: int,
-        weight_embedding_size: int,
+        output_embedding_size: int,
         source_sequence_size: int,
         query_sequence_size: int,
         add_bias: bool = True,
     ):
         super().__init__(
             embedding_size,
-            weight_embedding_size,
+            output_embedding_size,
             source_sequence_size,
             query_sequence_size,
             add_bias,
@@ -165,14 +109,14 @@ class VanillaAttentionForDecoder(BaseAttention):
     def __init__(
         self,
         embedding_size: int,
-        weight_embedding_size: int,
+        output_embedding_size: int,
         source_sequence_size: int,
         query_sequence_size: int,
         add_bias: bool = True,
     ):
         super().__init__(
             embedding_size,
-            weight_embedding_size,
+            output_embedding_size,
             source_sequence_size,
             query_sequence_size,
             add_bias,
@@ -206,7 +150,7 @@ class SlideWindowAttention(BaseAttention):
     def __init__(
         self,
         embedding_size: int,
-        weight_embedding_size: int,
+        output_embedding_size: int,
         source_sequence_size: int,
         query_sequence_size: int,
         window_size: int,
@@ -215,7 +159,7 @@ class SlideWindowAttention(BaseAttention):
     ):
         super().__init__(
             embedding_size,
-            weight_embedding_size,
+            output_embedding_size,
             source_sequence_size,
             query_sequence_size,
             add_bias,
@@ -242,3 +186,17 @@ class SlideWindowAttention(BaseAttention):
             attention_scores.append(AttentionScores(token_idx, list(key_token_ids), scores))
 
         return attention_scores
+
+
+class MultipleHeadAttention(nn.Module):
+    def __init__(self, heads: List[BaseAttention]):
+        super().__init__()
+        self.heads = heads
+        linear_layer_size = len(self.heads) * heads[0].output_embedding_size
+        self.linear = nn.Linear(linear_layer_size, linear_layer_size)
+        self.dropout = nn.Dropout()
+
+    def forward(self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor) -> torch.Tensor:
+        inputs = torch.cat([head(key, value, query) for head in self.heads], dim=-1)
+        out = self.dropout(self.linear(inputs))
+        return out

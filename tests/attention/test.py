@@ -3,7 +3,9 @@ import torch
 from attentions.entity import AttentionScores
 from attentions.entity import AttentionSchema
 from attentions.enum import AttentionDirection
+from attentions.models import MultipleHeadAttention
 from attentions.models import SlideWindowAttention
+from attentions.models import VanillaAttentionForDecoder
 from tests.utils import is_tensor_equal
 
 
@@ -95,7 +97,7 @@ class TestSlidingWindowAttention:
         window_size = 2
         attention = SlideWindowAttention(
             embedding_size=embedding_size,
-            weight_embedding_size=weight_embedding_size,
+            output_embedding_size=weight_embedding_size,
             source_sequence_size=source_sequence_size,
             query_sequence_size=query_sequence_size,
             window_size=window_size,
@@ -129,3 +131,26 @@ class TestSlidingWindowAttention:
 
         outputs = swa(key, value, query)
         assert outputs.shape == (target_token_size, weight_embedding_size)
+
+
+class TestMultiHeadAttention:
+    def test_forward(self) -> None:
+        num_of_heads = 5
+        embedding_size = 30
+        single_head_output_embedding_size = int(embedding_size / num_of_heads)
+        source_sequence_size = 6
+        query_sequence_size = 5
+        head = VanillaAttentionForDecoder(
+            embedding_size,
+            single_head_output_embedding_size,
+            source_sequence_size,
+            query_sequence_size,
+        )
+        heads = [head] * num_of_heads
+        attention = MultipleHeadAttention(heads)
+        key = torch.rand(source_sequence_size, embedding_size)
+        value = torch.rand_like(key)
+        query = torch.rand(query_sequence_size, embedding_size)
+        outputs = attention(key, value, query)
+
+        assert outputs.shape == (query_sequence_size, embedding_size)

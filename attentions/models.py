@@ -1,8 +1,12 @@
-from dataclasses import dataclass
 from typing import List
 
 import torch
+import numpy as np
 import torch.nn as nn
+
+from attentions.entity import AttentionSchema
+from attentions.entity import AttentionScores
+from attentions.enum import AttentionDirection
 
 
 class Head(nn.Module):
@@ -78,43 +82,17 @@ def chunk(hidden_states, window_overlap):
     return overlapping_chunks
 
 
-@dataclass
-class AttentionScores:
-    target_seq_token_id: int
-    source_seq_token_ids: List[int]
-    scores: torch.Tensor
-
-    def __eq__(self, other: "AttentionScores") -> bool:
-        return (
-            self.target_seq_token_id == other.target_seq_token_id
-            and self.source_seq_token_ids == other.source_seq_token_ids
-            and torch.all(torch.isclose(self.scores, other.scores, rtol=1e-03))
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.target_seq_token_id, str(self.source_seq_token_ids), self.scores))
-
-    def apply(self, source_sequence: torch.Tensor) -> torch.Tensor:
-        pass
-
-
-"""
-SWA
-window desing
-    - Sliding window
-    - Dilated window
-    - Global window
-    - dropout
-encoder or decoder (masking upper triangular part of attention score matrix)
-
-"""
-
-
 def calculate_slide_window_attention_scores(
     k: torch.Tensor,
     q: torch.Tensor,
     window_size: int,
 ) -> List[AttentionScores]:
+    """
+    :param k:
+    :param q:
+    :param window_size:
+    :return:
+    """
     assert k.shape[-1] == q.shape[-1]
     embedding_size = k.shape[-1]
     source_token_size = k.shape[-2]
@@ -142,52 +120,180 @@ def calculate_slide_window_attention_scores(
     return attention_scores
 
 
-class SlideWindowAttention(nn.Module):
+class BaseAttention(nn.Module):
     def __init__(
         self,
         embedding_size: int,
         weight_embedding_size: int,
-        source_token_size: int,
-        target_token_size: int,
-        window_size: int,
+        source_sequence_size: int,
+        query_sequence_size: int,
+        add_bias: bool = True,
+        attention_schema: AttentionSchema = AttentionSchema(AttentionDirection.BOTH),
     ):
         super().__init__()
-        self.key_weights = nn.Linear(embedding_size, weight_embedding_size, bias=False)
-        self.query_weights = nn.Linear(embedding_size, weight_embedding_size, bias=False)
-        self.value_weights = nn.Linear(embedding_size, weight_embedding_size, bias=False)
-        self.embedding_size = embedding_size,
+        self.key_weights = nn.Linear(embedding_size, weight_embedding_size, bias=add_bias)
+        self.query_weights = nn.Linear(embedding_size, weight_embedding_size, bias=add_bias)
+        self.value_weights = nn.Linear(embedding_size, weight_embedding_size, bias=add_bias)
+        self.embedding_size = embedding_size
         self.weight_embedding_size = weight_embedding_size
-        self.source_token_size = source_token_size
-        self.target_token_size = target_token_size
-        self.window_size = window_size
+        self.source_sequence_size = source_sequence_size
+        self.query_sequence_size = query_sequence_size
+        self.attention_schema = attention_schema
 
-    def _validate_inputs(self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor):
+    def validate_inputs(self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor):
         assert (
-            key.shape[0] == value.shape[0] == self.source_token_size,
+            key.shape[0] == value.shape[0] == self.source_sequence_size,
             (key.shape, value.shape, query.shape)
         )
-        assert query.shape[0] == self.target_token_size, query.shape
+        assert query.shape[0] == self.query_sequence_size, query.shape
         assert (
             key.shape[-1] ==  value.shape[-1] == query.shape[-1] == self.embedding_size,
             (key.shape, value.shape, query.shape)
         )
 
+    def calculate_attention_scores(
+        self, key: torch.Tensor, query: torch.Tensor,
+    ) -> List[AttentionScores]:
+        raise NotImplementedError()
+
+    @staticmethod
+    def apply_attention_scores(
+        attention_scores: List[AttentionScores],
+        value: torch.Tensor,
+    ) -> torch.Tensor:
+        query_sequence_size = len(attention_scores)
+        embedding_size = value.shape[-1]
+        outputs = torch.zeros((query_sequence_size, embedding_size))
+        for attention_score in attention_scores:
+            query_token_id = attention_score.query_seq_token_id
+            outputs[query_token_id, :] = attention_score.apply(value)
+
+        return outputs
+
     def forward(self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor) -> torch.Tensor:
-        self._validate_inputs(key, value, query)
+        self.validate_inputs(key, value, query)
         key = self.key_weights(key)
         value = self.value_weights(value)
         query = self.query_weights(query)
 
-        attention_scores = calculate_slide_window_attention_scores(key, query, self.window_size)
+        attention_scores = self.calculate_attention_scores(key, query)
+        return self.apply_attention_scores(attention_scores, value)
 
-        outputs = torch.zeros((self.target_token_size, self.weight_embedding_size))
-        for attention_score in attention_scores:
-            query_token_id = attention_score.target_seq_token_id
-            value_token_ids = attention_score.source_seq_token_ids
-            scores = attention_score.scores
-            outputs[query_token_id, :] = torch.mean(
-                scores.unsqueeze(-1) * value[value_token_ids,:],
-                dim=0,
+
+class VanillaAttentionForEncoder(BaseAttention):
+    def __init__(
+        self,
+        embedding_size: int,
+        weight_embedding_size: int,
+        source_sequence_size: int,
+        query_sequence_size: int,
+        add_bias: bool = True,
+    ):
+        super().__init__(
+            embedding_size,
+            weight_embedding_size,
+            source_sequence_size,
+            query_sequence_size,
+            add_bias,
+            attention_schema=AttentionSchema(AttentionDirection.BOTH),
+        )
+
+    def calculate_attention_scores(
+        self, key: torch.Tensor, query: torch.Tensor,
+    ) -> List[AttentionScores]:
+        raw_scores = query @ key.T
+        scores = raw_scores * self.embedding_size ** -0.5
+        scores = torch.softmax(scores, dim=-1)
+
+        query_sequence_size, key_sequence_size = scores.shape
+        return [
+            AttentionScores(
+                query_seq_token_id=query_token_id,
+                source_seq_token_ids=list(np.arange(key_sequence_size)),
+                scores=scores[query_token_id, :],
             )
+            for query_token_id in range(query_sequence_size)
+        ]
 
-        return outputs
+
+class VanillaAttentionForDecoder(BaseAttention):
+    def __init__(
+        self,
+        embedding_size: int,
+        weight_embedding_size: int,
+        source_sequence_size: int,
+        query_sequence_size: int,
+        add_bias: bool = True,
+    ):
+        super().__init__(
+            embedding_size,
+            weight_embedding_size,
+            source_sequence_size,
+            query_sequence_size,
+            add_bias,
+            attention_schema=AttentionSchema(AttentionDirection.LEFT),
+        )
+
+    def calculate_attention_scores(
+        self, key: torch.Tensor, query: torch.Tensor,
+    ) -> List[AttentionScores]:
+        raw_scores = query @ key.T
+        scores = raw_scores * self.embedding_size ** -0.5
+        scores = torch.softmax(scores, dim=-1)
+        attention_mask = self.attention_schema.create_attention_mask_based_on_direction(
+            self.query_sequence_size, self.source_sequence_size,
+        )
+        scores = torch.multiply(scores, attention_mask)
+        _, key_token_ids = torch.where(torch.isfinite(scores))
+
+        query_sequence_size, key_sequence_size = scores.shape
+        return [
+            AttentionScores(
+                query_seq_token_id=query_token_id,
+                source_seq_token_ids=key_token_ids[query_token_id].tolist(),
+                scores=scores[query_token_id, key_token_ids],
+            )
+            for query_token_id in range(query_sequence_size)
+        ]
+
+
+class SlideWindowAttention(BaseAttention):
+    def __init__(
+        self,
+        embedding_size: int,
+        weight_embedding_size: int,
+        source_sequence_size: int,
+        query_sequence_size: int,
+        window_size: int,
+        add_bias: bool = True,
+        attention_schema: AttentionSchema = AttentionSchema(AttentionDirection.BOTH),
+    ):
+        super().__init__(
+            embedding_size,
+            weight_embedding_size,
+            source_sequence_size,
+            query_sequence_size,
+            add_bias,
+            attention_schema,
+        )
+        self.window_size = window_size
+
+    def calculate_attention_scores(
+        self, key: torch.Tensor, query: torch.Tensor,
+    ) -> List[AttentionScores]:
+
+        attention_scores = []
+        attention_mask = self.attention_schema.create_sliding_window_mask(
+            self.query_sequence_size, self.source_sequence_size, self.window_size,
+        )
+        for token_idx in range(self.query_sequence_size):
+            key_token_ids = torch.where(~torch.isnan(attention_mask[token_idx, :]))[0]
+            chunk_start_idx = key_token_ids[0]
+            chunk_end_idx = key_token_ids[-1]
+            scores = query[token_idx, :] @ key[chunk_start_idx: chunk_end_idx + 1, :].T
+            scores = scores * self.embedding_size ** -0.5
+            scores = torch.softmax(scores, dim=-1)
+
+            attention_scores.append(AttentionScores(token_idx, list(key_token_ids), scores))
+
+        return attention_scores

@@ -65,23 +65,6 @@ class MulitHeadAttention(nn.Module):
         return out
 
 
-def chunk(hidden_states, window_overlap):
-    """convert into overlapping chunks. Chunk size = 2w, overlap = w"""
-    chunk_size = [
-        hidden_states.size(0), #bs
-        torch.div(hidden_states.size(1), window_overlap, rounding_mode="trunc") - 1, #n_chunks
-        window_overlap * 2,
-        hidden_states.size(2),
-    ]
-
-    overlapping_chunks = torch.empty(chunk_size, device=hidden_states.device)
-    for chunk in range(chunk_size[1]):
-        overlapping_chunks[:, chunk, :, :] = hidden_states[
-            :, chunk * window_overlap : chunk * window_overlap + 2 * window_overlap, :
-        ]
-    return overlapping_chunks
-
-
 class BaseAttention(nn.Module):
     def __init__(
         self,

@@ -1,11 +1,13 @@
 import pytest
 import torch
+from torch.nn.functional import embedding
 
 from positional_embeddings.models import get_attention_scores_adjusted_by_relative_positions
 from positional_embeddings.models import get_attention_scores_adjusted_by_relative_positions_bias
 from positional_embeddings.models import RelativePositionalEmbedding
 from positional_embeddings.models import RelativeBiasPositionalEmbedding
 from positional_embeddings.models import VanillaPositionalEmbedding
+from positional_embeddings.models import RotaryPositionalEmbeddings
 from tests.utils import is_tensor_equal
 
 
@@ -81,9 +83,7 @@ class TestRelativeBiasPositionalEmbedding:
         source_sequence_size: int,
         embedding_size: int,
     ) -> RelativeBiasPositionalEmbedding:
-        return RelativeBiasPositionalEmbedding(
-            target_sequence_size, source_sequence_size, embedding_size,
-        )
+        return RelativeBiasPositionalEmbedding(target_sequence_size, source_sequence_size)
 
     def test_forward(self) -> None:
         target_sequence_size = 2
@@ -92,6 +92,60 @@ class TestRelativeBiasPositionalEmbedding:
 
         outputs = model.forward()
         assert outputs.shape == (target_sequence_size, source_sequence_length)
+
+
+class TestRotaryPositionalEmbeddings:
+    @pytest.fixture
+    def model(self) -> RotaryPositionalEmbeddings:
+        target_sequence_size = 2
+        source_sequence_size = 3
+        embedding_size = 4
+        theta_base_value = 10000.0
+        return RotaryPositionalEmbeddings(
+            target_sequence_size,
+            source_sequence_size,
+            embedding_size,
+            theta_base_value,
+        )
+
+    def test_position_embedding_size(self, model: RotaryPositionalEmbeddings) -> None:
+        assert (
+            model.position_embedding_size
+            == max(model.source_sequence_size, model.target_sequence_size)
+        )
+
+    def test_get_embedding(self, model: RotaryPositionalEmbeddings) -> None:
+        position_embedding = model.get_embedding()
+        assert position_embedding.shape == (
+            model.position_embedding_size, model.embedding_size, model.embedding_size,
+        )
+        assert position_embedding.requires_grad is False
+
+    def test_forward(self, model: RotaryPositionalEmbeddings) -> None:
+        output = model()
+        assert output.shape == (
+            model.position_embedding_size, model.embedding_size, model.embedding_size,
+        )
+
+    def test_apply_on_single_token(self, model: RotaryPositionalEmbeddings) -> None:
+        embedding_size = 4
+        token_order = 0
+        input_token = torch.rand(embedding_size)
+        rotated_input_token = model.apply_on_single_token(input_token, 0)
+
+        assert embedding_size == model.embedding_size
+        assert token_order <= model.position_embedding_size
+        assert rotated_input_token.shape == input_token.shape
+
+    def test_apply_on_tokens(self, model: RotaryPositionalEmbeddings) -> None:
+        embedding_size = 4
+        num_tokens = 3
+        input_tokens = torch.rand(num_tokens, embedding_size)
+        rotated_input_tokens = model.apply_on_tokens(input_tokens)
+
+        assert embedding_size == model.embedding_size
+        assert num_tokens <= model.position_embedding_size
+        assert rotated_input_tokens.shape == input_tokens.shape
 
 
 def test_get_adjusted_attention_scores() -> None:

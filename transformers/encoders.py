@@ -1,16 +1,24 @@
-import torch
-import torch.nn as nn
 from typing import List
+from typing import TypeVar
+
+import torch
+from torch import nn
 
 from attentions.models import BaseAttention
 from attentions.models import VanillaAttentionForEncoder
-from transformers.utils import create_norm_layer, create_mlp, \
-    create_drop_out_layer, residual_connection
+from transformers.utils import create_drop_out_layer
+from transformers.utils import create_mlp
+from transformers.utils import create_norm_layer
+from transformers.utils import residual_connection
+
+TypeAttention = TypeVar("TypeAttention", bound=BaseAttention)
 
 
 def create_attention_layer(
-    source_seq_length: int, query_seq_length: int, embedding_size: int,
-) -> BaseAttention:
+    source_seq_length: int,
+    query_seq_length: int,
+    embedding_size: int,
+) -> VanillaAttentionForEncoder:
     return VanillaAttentionForEncoder(
         embedding_size=embedding_size,
         output_embedding_size=embedding_size,
@@ -22,7 +30,7 @@ def create_attention_layer(
 class Encoder(nn.Module):
     def __init__(
         self,
-        attention: BaseAttention,
+        attention: TypeAttention,
         mlp: nn.Module,
         norm_after_attention: nn.Module,
         norm_after_mlp: nn.Module,

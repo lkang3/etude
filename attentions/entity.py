@@ -19,11 +19,10 @@ class AttentionSchema:
         if self.direction == AttentionDirection.LEFT:
             mask = torch.tril(mask)
             return torch.masked_fill(mask, mask == 0, torch.nan)
-        elif self.direction == AttentionDirection.RIGHT:
+        if self.direction == AttentionDirection.RIGHT:
             mask = torch.triu(mask)
             return torch.masked_fill(mask, mask == 0, torch.nan)
-        else:
-            return mask
+        return mask
 
     def create_sliding_window_mask(
         self,
@@ -34,7 +33,8 @@ class AttentionSchema:
         attention_mask = torch.zeros(query_seq_size, source_seq_size)
         for query_token_idx in range(query_seq_size):
             chunk_start_idx = (
-                query_token_idx - window_size if query_token_idx > window_size
+                query_token_idx - window_size
+                if query_token_idx > window_size
                 else min(0, query_token_idx)
             )
             chunk_end_idx = (
@@ -42,8 +42,10 @@ class AttentionSchema:
                 if query_token_idx + window_size + 1 < source_seq_size
                 else min(source_seq_size, query_token_idx + window_size + 1)
             )
-            attention_mask[query_token_idx, chunk_start_idx: chunk_end_idx] = 1
-        attention_mask = torch.masked_fill(attention_mask, attention_mask == 0, torch.nan)
+            attention_mask[query_token_idx, chunk_start_idx:chunk_end_idx] = 1
+        attention_mask = torch.masked_fill(
+            attention_mask, attention_mask == 0, torch.nan
+        )
         if self.direction != AttentionDirection.BOTH:
             mask_with_direction = self.create_attention_mask_based_on_direction(
                 query_seq_size,
@@ -60,7 +62,7 @@ class AttentionScores:
     source_seq_token_ids: List[int]
     scores: torch.Tensor
 
-    def __eq__(self, other: "AttentionScores") -> bool:
+    def __eq__(self, other: "AttentionScores") -> bool:  # type: ignore
         return (
             self.query_seq_token_id == other.query_seq_token_id
             and self.source_seq_token_ids == other.source_seq_token_ids
@@ -68,7 +70,9 @@ class AttentionScores:
         )
 
     def __hash__(self) -> int:
-        return hash((self.query_seq_token_id, str(self.source_seq_token_ids), self.scores))
+        return hash(
+            (self.query_seq_token_id, str(self.source_seq_token_ids), self.scores)
+        )
 
     def apply(self, source_token_sequences: torch.Tensor) -> torch.Tensor:
         """
@@ -81,6 +85,7 @@ class AttentionScores:
         scores.unsequeeze(-1) * token_sequences
         """
         return torch.mean(
-            self.scores.unsqueeze(-1) * source_token_sequences[self.source_seq_token_ids, :],
+            self.scores.unsqueeze(-1)
+            * source_token_sequences[self.source_seq_token_ids, :],
             dim=0,
         )

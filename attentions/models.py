@@ -1,8 +1,8 @@
 from typing import List
 
-import torch
 import numpy as np
-import torch.nn as nn
+import torch
+from torch import nn
 
 from attentions.entity import AttentionSchema
 from attentions.entity import AttentionScores
@@ -20,28 +20,38 @@ class BaseAttention(nn.Module):
         attention_schema: AttentionSchema = AttentionSchema(AttentionDirection.BOTH),
     ):
         super().__init__()
-        self.key_weights = nn.Linear(embedding_size, output_embedding_size, bias=add_bias)
-        self.query_weights = nn.Linear(embedding_size, output_embedding_size, bias=add_bias)
-        self.value_weights = nn.Linear(embedding_size, output_embedding_size, bias=add_bias)
+        self.key_weights = nn.Linear(
+            embedding_size, output_embedding_size, bias=add_bias
+        )
+        self.query_weights = nn.Linear(
+            embedding_size, output_embedding_size, bias=add_bias
+        )
+        self.value_weights = nn.Linear(
+            embedding_size, output_embedding_size, bias=add_bias
+        )
         self.embedding_size = embedding_size
         self.output_embedding_size = output_embedding_size
         self.source_sequence_size = source_sequence_size
         self.query_sequence_size = query_sequence_size
         self.attention_schema = attention_schema
 
-    def validate_inputs(self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor):
-        assert (
-            key.shape[0] == value.shape[0] == self.source_sequence_size,
-            (key.shape, value.shape, query.shape)
+    def validate_inputs(
+        self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor
+    ):
+        assert key.shape[0] == value.shape[0] == self.source_sequence_size, (
+            key.shape,
+            value.shape,
+            query.shape,
         )
         assert query.shape[0] == self.query_sequence_size, query.shape
         assert (
-            key.shape[-1] ==  value.shape[-1] == query.shape[-1] == self.embedding_size,
-            (key.shape, value.shape, query.shape)
-        )
+            key.shape[-1] == value.shape[-1] == query.shape[-1] == self.embedding_size
+        ), (key.shape, value.shape, query.shape)
 
     def calculate_attention_scores(
-        self, key: torch.Tensor, query: torch.Tensor,
+        self,
+        key: torch.Tensor,
+        query: torch.Tensor,
     ) -> List[AttentionScores]:
         raise NotImplementedError()
 
@@ -59,7 +69,9 @@ class BaseAttention(nn.Module):
 
         return outputs
 
-    def forward(self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor
+    ) -> torch.Tensor:
         self.validate_inputs(key, value, query)
         key = self.key_weights(key)
         value = self.value_weights(value)
@@ -88,10 +100,12 @@ class VanillaAttentionForEncoder(BaseAttention):
         )
 
     def calculate_attention_scores(
-        self, key: torch.Tensor, query: torch.Tensor,
+        self,
+        key: torch.Tensor,
+        query: torch.Tensor,
     ) -> List[AttentionScores]:
         raw_scores = query @ key.T
-        scores = raw_scores * self.embedding_size ** -0.5
+        scores = raw_scores * self.embedding_size**-0.5
         scores = torch.softmax(scores, dim=-1)
 
         query_sequence_size, key_sequence_size = scores.shape
@@ -124,18 +138,21 @@ class VanillaAttentionForDecoder(BaseAttention):
         )
 
     def calculate_attention_scores(
-        self, key: torch.Tensor, query: torch.Tensor,
+        self,
+        key: torch.Tensor,
+        query: torch.Tensor,
     ) -> List[AttentionScores]:
         raw_scores = query @ key.T
-        scores = raw_scores * self.embedding_size ** -0.5
+        scores = raw_scores * self.embedding_size**-0.5
         scores = torch.softmax(scores, dim=-1)
         attention_mask = self.attention_schema.create_attention_mask_based_on_direction(
-            self.query_sequence_size, self.source_sequence_size,
+            self.query_sequence_size,
+            self.source_sequence_size,
         )
         scores = torch.multiply(scores, attention_mask)
         _, key_token_ids = torch.where(torch.isfinite(scores))
 
-        query_sequence_size, key_sequence_size = scores.shape
+        query_sequence_size, _ = scores.shape
         return [
             AttentionScores(
                 query_seq_token_id=query_token_id,
@@ -168,22 +185,28 @@ class SlideWindowAttention(BaseAttention):
         self.window_size = window_size
 
     def calculate_attention_scores(
-        self, key: torch.Tensor, query: torch.Tensor,
+        self,
+        key: torch.Tensor,
+        query: torch.Tensor,
     ) -> List[AttentionScores]:
 
         attention_scores = []
         attention_mask = self.attention_schema.create_sliding_window_mask(
-            self.query_sequence_size, self.source_sequence_size, self.window_size,
+            self.query_sequence_size,
+            self.source_sequence_size,
+            self.window_size,
         )
         for token_idx in range(self.query_sequence_size):
             key_token_ids = torch.where(~torch.isnan(attention_mask[token_idx, :]))[0]
             chunk_start_idx = key_token_ids[0]
             chunk_end_idx = key_token_ids[-1]
-            scores = query[token_idx, :] @ key[chunk_start_idx: chunk_end_idx + 1, :].T
-            scores = scores * self.embedding_size ** -0.5
+            scores = query[token_idx, :] @ key[chunk_start_idx : chunk_end_idx + 1, :].T
+            scores = scores * self.embedding_size**-0.5
             scores = torch.softmax(scores, dim=-1)
 
-            attention_scores.append(AttentionScores(token_idx, list(key_token_ids), scores))
+            attention_scores.append(
+                AttentionScores(token_idx, list(key_token_ids), scores)
+            )
 
         return attention_scores
 
@@ -196,7 +219,9 @@ class MultipleHeadAttention(nn.Module):
         self.linear = nn.Linear(linear_layer_size, linear_layer_size)
         self.dropout = nn.Dropout()
 
-    def forward(self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor
+    ) -> torch.Tensor:
         inputs = torch.cat([head(key, value, query) for head in self.heads], dim=-1)
         out = self.dropout(self.linear(inputs))
         return out

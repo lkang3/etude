@@ -1,15 +1,22 @@
+from typing import TypeVar
+
 import torch
-from torch import nn as nn
+from torch import nn
 
 from attentions.models import BaseAttention
-from attentions.models import VanillaAttentionForEncoder
 from attentions.models import VanillaAttentionForDecoder
-from transformers.utils import create_norm_layer, create_mlp, \
-    create_drop_out_layer, residual_connection
+from attentions.models import VanillaAttentionForEncoder
+from transformers.utils import create_drop_out_layer
+from transformers.utils import create_mlp
+from transformers.utils import create_norm_layer
+from transformers.utils import residual_connection
+
+TypeAttention = TypeVar("TypeAttention", bound=BaseAttention)
 
 
 def create_decoder_self_attention_layer(
-    decoder_input_seq_length: int, embedding_size: int,
+    decoder_input_seq_length: int,
+    embedding_size: int,
 ) -> VanillaAttentionForDecoder:
     return VanillaAttentionForDecoder(
         embedding_size=embedding_size,
@@ -20,7 +27,9 @@ def create_decoder_self_attention_layer(
 
 
 def create_decoder_encoder_attention_layer(
-    encoder_input_seq_length: int, decoder_input_seq_length: int, embedding_size: int,
+    encoder_input_seq_length: int,
+    decoder_input_seq_length: int,
+    embedding_size: int,
 ) -> VanillaAttentionForEncoder:
     return VanillaAttentionForEncoder(
         embedding_size=embedding_size,
@@ -33,8 +42,8 @@ def create_decoder_encoder_attention_layer(
 class Decoder(nn.Module):
     def __init__(
         self,
-        decoder_self_attention: BaseAttention,
-        decoder_encoder_attention: BaseAttention,
+        decoder_self_attention: TypeAttention,
+        decoder_encoder_attention: TypeAttention,
         mlp: nn.Module,
         norm_after_decoder_input_attention: nn.Module,
         norm_after_encoder_input_attention: nn.Module,
@@ -43,16 +52,20 @@ class Decoder(nn.Module):
         drop_out_after_encoder_input_attention: nn.Module,
         drop_out_after_mlp: nn.Module,
     ):
-      super().__init__()
-      self.decoder_self_attention = decoder_self_attention
-      self.decoder_encoder_attention = decoder_encoder_attention
-      self.mlp = mlp
-      self.norm_after_decoder_input_attention = norm_after_decoder_input_attention
-      self.norm_after_encoder_input_attention = norm_after_encoder_input_attention
-      self.norm_after_mlp = norm_after_mlp
-      self.drop_out_after_decoder_input_attention = drop_out_after_decoder_input_attention
-      self.drop_out_after_encoder_input_attention = drop_out_after_encoder_input_attention
-      self.drop_out_after_mlp = drop_out_after_mlp
+        super().__init__()
+        self.decoder_self_attention = decoder_self_attention
+        self.decoder_encoder_attention = decoder_encoder_attention
+        self.mlp = mlp
+        self.norm_after_decoder_input_attention = norm_after_decoder_input_attention
+        self.norm_after_encoder_input_attention = norm_after_encoder_input_attention
+        self.norm_after_mlp = norm_after_mlp
+        self.drop_out_after_decoder_input_attention = (
+            drop_out_after_decoder_input_attention
+        )
+        self.drop_out_after_encoder_input_attention = (
+            drop_out_after_encoder_input_attention
+        )
+        self.drop_out_after_mlp = drop_out_after_mlp
 
     @classmethod
     def create_from_config(
@@ -62,14 +75,21 @@ class Decoder(nn.Module):
         embedding_size: int,
     ) -> "Decoder":
         decoder_input_attention = create_decoder_self_attention_layer(
-            query_seq_length, embedding_size,
+            query_seq_length,
+            embedding_size,
         )
         decoder_encoder_attention = create_decoder_encoder_attention_layer(
-            source_seq_length, query_seq_length, embedding_size,
+            source_seq_length,
+            query_seq_length,
+            embedding_size,
         )
         mlp = create_mlp(embedding_size, embedding_size)
-        norm_after_decoder_input_attention = create_norm_layer(decoder_input_attention.embedding_size)
-        norm_after_encoder_input_attention = create_norm_layer(decoder_encoder_attention.embedding_size)
+        norm_after_decoder_input_attention = create_norm_layer(
+            decoder_input_attention.embedding_size
+        )
+        norm_after_encoder_input_attention = create_norm_layer(
+            decoder_encoder_attention.embedding_size
+        )
         norm_after_mlp = create_norm_layer(embedding_size)
 
         drop_out_after_decoder_input_attention = create_drop_out_layer()
@@ -88,14 +108,20 @@ class Decoder(nn.Module):
             drop_out_after_mlp,
         )
 
-    def forward(self, decoder_inputs: torch.Tensor, encoder_inputs: torch.Tensor) -> torch.Tensor:
-        data = self.decoder_self_attention(decoder_inputs, decoder_inputs, decoder_inputs)
+    def forward(
+        self, decoder_inputs: torch.Tensor, encoder_inputs: torch.Tensor
+    ) -> torch.Tensor:
+        data = self.decoder_self_attention(
+            decoder_inputs, decoder_inputs, decoder_inputs
+        )
         data = residual_connection(decoder_inputs, data)
         data = self.norm_after_decoder_input_attention(data)
         decoder_inputs = self.drop_out_after_decoder_input_attention(data)
 
         encoder_inputs = self.decoder_encoder_attention(
-            encoder_inputs, encoder_inputs, decoder_inputs,
+            encoder_inputs,
+            encoder_inputs,
+            decoder_inputs,
         )
         data = residual_connection(encoder_inputs, data)
         data = self.norm_after_encoder_input_attention(data)

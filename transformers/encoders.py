@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import List
 
 from attentions.models import BaseAttention
 from attentions.models import VanillaAttentionForEncoder
@@ -56,6 +57,15 @@ class Encoder(nn.Module):
             drop_out_after_attention,
             drop_out_after_mlp,
         )
+
+    @classmethod
+    def create_encoder_block(
+        cls,
+        seq_length: int,
+        embedding_size: int,
+        num_of_encoder: int,
+    ) -> List["Encoder"]:
+        return [cls.create_from_config(seq_length, embedding_size)] * num_of_encoder
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         data = self.attention(inputs, inputs, inputs)

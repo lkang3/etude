@@ -1,4 +1,3 @@
-from typing import List
 from typing import TypeVar
 
 import torch
@@ -72,8 +71,10 @@ class Encoder(nn.Module):
         seq_length: int,
         embedding_size: int,
         num_of_encoder: int,
-    ) -> List["Encoder"]:
-        return [cls.create_from_config(seq_length, embedding_size)] * num_of_encoder
+    ) -> nn.ModuleList:
+        return nn.ModuleList(
+            [cls.create_from_config(seq_length, embedding_size)] * num_of_encoder
+        )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         data = self.attention(inputs, inputs, inputs)
@@ -87,3 +88,23 @@ class Encoder(nn.Module):
         data = self.drop_out_after_mlp(data)
 
         return data
+
+
+class EncoderBlock(nn.Module):
+    def __init__(self, max_seq_length: int, embedding_size: int, num_of_encoders: int):
+        super().__init__()
+        self.max_seq_length = max_seq_length
+        self.embedding_size = embedding_size
+        self.num_of_encoders = num_of_encoders
+        self.encoders = Encoder.create_encoder_block(
+            max_seq_length,
+            embedding_size,
+            num_of_encoders,
+        )
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        embeddings = inputs
+        for encoder in self.encoders:
+            embeddings = encoder(inputs)
+
+        return embeddings

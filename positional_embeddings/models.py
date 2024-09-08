@@ -1,11 +1,12 @@
 from typing import Tuple
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 def get_attention_scores_adjusted_by_relative_positions(
-    positions_embeddings: torch.Tensor, query: torch.Tensor,
+    positions_embeddings: torch.Tensor,
+    query: torch.Tensor,
 ) -> torch.Tensor:
     """
 
@@ -25,27 +26,12 @@ def get_attention_scores_adjusted_by_relative_positions_bias(
     return positions_embeddings + unscaled_attention_scores
 
 
-def get_adjusted_attention_scores(
-    positions_embeddings: torch.Tensor, query: torch.Tensor, key: torch.Tensor,
-) -> torch.Tensor:
-    """
-    rational: (qd @ dd) @ (kd @@ dd)T -> qd @ (dd @ ddT) @ kdT
-
-    :param positions_embeddings:
-    :param query:
-    :param key:
-    :return:
-    """
-    query_outputs = []
-
-    query_outputs = torch.stack(query_outputs)
-
-    key_outputs = []
-    key_outputs = torch.stack(key_outputs)
-
-
 class BaseUnlearnablePositionEmbedding(nn.Module):
-    pass
+    def get_embedding(self) -> torch.Tensor:
+        raise NotImplementedError()
+
+    def forward(self) -> torch.Tensor:
+        return self.get_embedding()
 
 
 class BasePositionalEmbedding(nn.Module):
@@ -55,10 +41,10 @@ class BasePositionalEmbedding(nn.Module):
         self.position_embedding = self.get_embedding()
 
     def get_embedding(self) -> nn.Embedding:
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def get_positions_embedding_idx(self) -> torch.Tensor:
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def forward(self) -> torch.Tensor:
         positions = self.get_positions_embedding_idx()
@@ -67,7 +53,6 @@ class BasePositionalEmbedding(nn.Module):
 
 class VanillaPositionalEmbedding(BasePositionalEmbedding):
     def __init__(self, max_sequence_length: int, embedding_size: int):
-        self.max_sequence_length = max_sequence_length
         self.max_sequence_length = max_sequence_length
         self.embedding_size = embedding_size
         super().__init__()
@@ -80,7 +65,9 @@ class VanillaPositionalEmbedding(BasePositionalEmbedding):
 
 
 class RelativePositionalEmbedding(BasePositionalEmbedding):
-    def __init__(self, target_sequence_size: int, source_sequence_size: int, embedding_size: int):
+    def __init__(
+        self, target_sequence_size: int, source_sequence_size: int, embedding_size: int
+    ):
         self.target_sequence_size = target_sequence_size
         self.source_sequence_size = source_sequence_size
         self.embedding_size = embedding_size
@@ -94,7 +81,8 @@ class RelativePositionalEmbedding(BasePositionalEmbedding):
 
     @staticmethod
     def get_relative_positions(
-        target_sequence_size: int, source_sequence_size: int,
+        target_sequence_size: int,
+        source_sequence_size: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         :param target_sequence_size:
@@ -105,16 +93,16 @@ class RelativePositionalEmbedding(BasePositionalEmbedding):
         """
         rel_positions_in_query_sequence = torch.arange(target_sequence_size)
         rel_positions_in_source_sequence = torch.arange(source_sequence_size)
-        raw_rel_positions = (
-            rel_positions_in_source_sequence.unsqueeze(0)
-            - rel_positions_in_query_sequence.unsqueeze(-1)
-        )
+        raw_rel_positions = rel_positions_in_source_sequence.unsqueeze(
+            0
+        ) - rel_positions_in_query_sequence.unsqueeze(-1)
         positive_rel_positions = -torch.min(raw_rel_positions) + raw_rel_positions
         return raw_rel_positions, positive_rel_positions
 
     def get_positions_embedding_idx(self) -> torch.Tensor:
         _, rel_positions = self.get_relative_positions(
-            self.target_sequence_size, self.source_sequence_size,
+            self.target_sequence_size,
+            self.source_sequence_size,
         )
         return rel_positions
 
@@ -128,7 +116,9 @@ class RelativeBiasPositionalEmbedding(RelativePositionalEmbedding):
         self.target_sequence_size = target_sequence_size
         self.source_sequence_size = source_sequence_size
         self.embedding_size = 1
-        super().__init__(self.target_sequence_size, self.source_sequence_size, self.embedding_size)
+        super().__init__(
+            self.target_sequence_size, self.source_sequence_size, self.embedding_size
+        )
 
     def forward(self) -> torch.Tensor:
         outputs = super().forward()
@@ -136,7 +126,64 @@ class RelativeBiasPositionalEmbedding(RelativePositionalEmbedding):
 
 
 class SinusoidalPositionalEmbeddings(BaseUnlearnablePositionEmbedding):
-    pass
+    def __init__(
+        self,
+        max_sequence_size: int,
+        embedding_size: int,
+        theta_base_value: float = 10000.0,
+    ):
+        self.position_size = max_sequence_size
+        self.embedding_size = embedding_size
+        self.theta_base_value = theta_base_value
+        self.position_embedding = self.get_embedding()
+        super().__init__()
+
+    def get_theta(
+        self,
+        token_orders_in_sequence: torch.Tensor,
+        token_embedding_indices: torch.Tensor,
+    ) -> torch.Tensor:
+        theta = self.theta_base_value ** (
+            -2 * token_embedding_indices / self.embedding_size
+        )
+        return token_orders_in_sequence * theta
+
+    def get_even_embedding_indices(self) -> torch.Tensor:
+        return torch.arange(0, self.embedding_size, 2)
+
+    def get_odd_embedding_indices(self) -> torch.Tensor:
+        return torch.arange(1, self.embedding_size, 2)
+
+    def get_positional_embeddings_at_even_embedding_positions(self) -> torch.Tensor:
+        token_orders_in_sequence = torch.arange(0, self.position_size).unsqueeze(1)
+        embedding_ids = self.get_even_embedding_indices()
+        theta = self.get_theta(token_orders_in_sequence, embedding_ids)
+        return torch.sin(theta)
+
+    def get_positional_embeddings_at_odd_embedding_positions(self) -> torch.Tensor:
+        token_orders_in_sequence = torch.arange(0, self.position_size).unsqueeze(1)
+        embedding_ids = self.get_odd_embedding_indices()
+        theta = self.get_theta(token_orders_in_sequence, embedding_ids)
+        return torch.cos(theta)
+
+    def get_embedding(self) -> torch.Tensor:
+        positional_embeddings = torch.ones(
+            self.position_size,
+            self.embedding_size,
+            requires_grad=False,
+        )
+        even_embedding_ids = self.get_even_embedding_indices()
+        odd_embedding_ids = self.get_odd_embedding_indices()
+        positional_embeddings[:, even_embedding_ids] = (
+            self.get_positional_embeddings_at_even_embedding_positions()
+        )
+        positional_embeddings[:, odd_embedding_ids] = (
+            self.get_positional_embeddings_at_odd_embedding_positions()
+        )
+        return positional_embeddings
+
+    def forward(self) -> torch.Tensor:
+        return self.get_embedding()
 
 
 class RotaryPositionalEmbeddings(BaseUnlearnablePositionEmbedding):
@@ -150,7 +197,9 @@ class RotaryPositionalEmbeddings(BaseUnlearnablePositionEmbedding):
         self.target_sequence_size = target_sequence_size
         self.source_sequence_size = source_sequence_size
         self.embedding_size = embedding_size
-        self.position_embedding_size = max(self.target_sequence_size, self.source_sequence_size)
+        self.position_embedding_size = max(
+            self.target_sequence_size, self.source_sequence_size
+        )
         self.theta_base_value = theta_base_value
         self.position_embedding = self.get_embedding()
         super().__init__()
@@ -171,22 +220,34 @@ class RotaryPositionalEmbeddings(BaseUnlearnablePositionEmbedding):
         m_theta = token_orders * theta
         cos_values = torch.cos(m_theta)
         sin_values = torch.sin(m_theta)
-        positional_embeddings[:, 2 * embedding_slicing_idx, 2 * embedding_slicing_idx] = cos_values
-        positional_embeddings[:, 2 * embedding_slicing_idx, 2 * embedding_slicing_idx + 1] = -sin_values
-        positional_embeddings[:, 2 * embedding_slicing_idx + 1, 2 * embedding_slicing_idx] = sin_values
-        positional_embeddings[:, 2 * embedding_slicing_idx + 1, 2 * embedding_slicing_idx + 1] = cos_values
+        positional_embeddings[
+            :, 2 * embedding_slicing_idx, 2 * embedding_slicing_idx
+        ] = cos_values
+        positional_embeddings[
+            :, 2 * embedding_slicing_idx, 2 * embedding_slicing_idx + 1
+        ] = -sin_values
+        positional_embeddings[
+            :, 2 * embedding_slicing_idx + 1, 2 * embedding_slicing_idx
+        ] = sin_values
+        positional_embeddings[
+            :, 2 * embedding_slicing_idx + 1, 2 * embedding_slicing_idx + 1
+        ] = cos_values
 
         return positional_embeddings
 
     def forward(self) -> torch.Tensor:
         return self.get_embedding()
 
-    def apply_on_single_token(self, input_token: torch.Tensor, token_order: int) -> torch.Tensor:
+    def apply_on_single_token(
+        self, input_token: torch.Tensor, token_order: int
+    ) -> torch.Tensor:
         rotation_matrix = self.position_embedding[token_order, :]
         return input_token @ rotation_matrix
 
     def apply_on_tokens(self, input_tokens: torch.Tensor) -> torch.Tensor:
         outputs = []
         for token_id in range(len(input_tokens)):
-            outputs.append(self.apply_on_single_token(input_tokens[token_id, :], token_id))
+            outputs.append(
+                self.apply_on_single_token(input_tokens[token_id, :], token_id)
+            )
         return torch.stack(outputs)

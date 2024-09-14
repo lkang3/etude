@@ -150,14 +150,18 @@ class VanillaAttentionForDecoder(BaseAttention):
             self.source_sequence_size,
         )
         scores = torch.multiply(scores, attention_mask)
-        _, key_token_ids = torch.where(torch.isfinite(scores))
+        query_token_ids, key_token_ids = torch.where(torch.isfinite(scores))
 
         query_sequence_size, _ = scores.shape
         return [
             AttentionScores(
                 query_seq_token_id=query_token_id,
-                source_seq_token_ids=key_token_ids[query_token_id].tolist(),
-                scores=scores[query_token_id, key_token_ids],
+                source_seq_token_ids=key_token_ids[
+                    query_token_ids == query_token_id
+                ].tolist(),
+                scores=scores[
+                    query_token_id, key_token_ids[query_token_ids == query_token_id]
+                ],
             )
             for query_token_id in range(query_sequence_size)
         ]

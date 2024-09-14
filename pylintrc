@@ -439,6 +439,8 @@ disable=raw-checker-failed,
         missing-class-docstring,
         missing-function-docstring,
         too-few-public-methods,
+        redefined-outer-name,
+        fixme,
 
 
 # Enable the message, report, category or checker with the given id(s). You can

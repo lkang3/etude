@@ -6,12 +6,15 @@ from torch import nn
 from positional_embeddings.models import SinusoidalPositionalEmbeddings
 from transformers.models import EncoderOrDecoderLayers
 from transformers.models import TransformerConfig
+from transformers.models import TransformerType
 
 
 @dataclass
 class CLMConfig:
-    transformer_config: TransformerConfig
+    max_seq_length: int
+    embedding_size: int
     num_of_vocabulary: int
+    num_of_decoders: int
 
 
 class DecoderOnlyTransformerHeader(nn.Module):
@@ -40,15 +43,20 @@ class DecoderOnlyTransformer(nn.Module):
 
     @classmethod
     def from_config(cls, config: CLMConfig) -> "DecoderOnlyTransformer":
-        embedding_size = config.transformer_config.embedding_size
+        embedding_size = config.embedding_size
         embeddings_layer = nn.Embedding(config.num_of_vocabulary, embedding_size)
         positional_embeddings_layer = SinusoidalPositionalEmbeddings(
-            config.transformer_config.max_seq_length,
+            config.max_seq_length,
             embedding_size,
         )
-        transformer_layers = EncoderOrDecoderLayers.from_config(
-            config.transformer_config
+        transformer_config = TransformerConfig(
+            type=TransformerType.DECODER,
+            source_seq_length=config.max_seq_length,
+            target_seq_length=config.max_seq_length,
+            embedding_size=embedding_size,
+            num_of_layers=config.num_of_decoders,
         )
+        transformer_layers = EncoderOrDecoderLayers.from_config(transformer_config)
         return cls(embeddings_layer, positional_embeddings_layer, transformer_layers)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -60,31 +68,25 @@ class DecoderOnlyTransformer(nn.Module):
         return self.header(hidden_states)
 
 
-class NextToken(torch.Tensor):
-    def __init__(
-        self,
-        max_seq_length: int,
-        embedding_size,
-        num_of_vocabulary: int,
-        num_of_decoders: int,
-    ):
+class NextToken(nn.Module):
+    def __init__(self, transformer: nn.Module, max_sequence_length: int):
         super().__init__()
-        self.transformer = DecoderOnlyTransformer.create_from_config(
-            max_seq_length,
-            embedding_size,
-            num_of_vocabulary,
-            num_of_decoders,
+        self.transformer = transformer
+        self.max_sequence_length = max_sequence_length
+
+    @classmethod
+    def from_config(cls, config: CLMConfig) -> "NextToken":
+        return cls(
+            DecoderOnlyTransformer.from_config(config),
+            config.max_seq_length,
         )
+
+    @staticmethod
+    def aggregate_hidden_states(hidden_states: torch.Tensor) -> torch.Tensor:
+        return hidden_states[-1, :]
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         hidden_states = self.transformer(inputs)
-        hidden_states = hidden_states[0]
-        return nn.functional.softmax(hidden_states, dim=-1)
-
-
-class NextTokenTrainer:
-    def train(self) -> None:
-        pass
-
-    def inference(self) -> None:
-        pass
+        hidden_states = self.aggregate_hidden_states(hidden_states)
+        outputs = nn.functional.softmax(hidden_states, dim=-1)
+        return outputs.unsqueeze(0)

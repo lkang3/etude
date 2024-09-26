@@ -1,8 +1,29 @@
 import torch
+from dataclasses import dataclass
 from torch import nn
 
 from positional_embeddings.models import SinusoidalPositionalEmbeddings
-from transformers.encoders import EncoderBlock
+from transformers.models import EncoderOrDecoderLayers
+from transformers.models import TransformerConfig
+from transformers.models import TransformerType
+
+
+@dataclass
+class MLMConfig:
+    max_seq_length: int
+    embedding_size: int
+    num_of_vocabulary: int
+    num_of_encoder_layers: int
+
+    @property
+    def encoder_config(self) -> TransformerConfig:
+        return TransformerConfig(
+            TransformerType.ENCODER,
+            self.max_seq_length,
+            self.max_seq_length,
+            self.embedding_size,
+            self.num_of_encoder_layers,
+        )
 
 
 class MLMHeader(nn.Module):
@@ -20,29 +41,23 @@ class MLM(nn.Module):
         self,
         embeddings: nn.Embedding,
         positional_embeddings: SinusoidalPositionalEmbeddings,
-        encoder_block: EncoderBlock,
+        encoder_layers: EncoderOrDecoderLayers,
     ):
         super().__init__()
         self.embeddings = embeddings
         self.positional_embeddings = positional_embeddings
-        self.encoder_block = encoder_block
+        self.encoder_layers = encoder_layers
         self.header = MLMHeader(
-            self.encoder_block.embedding_size, self.embeddings.num_embeddings
+            self.encoder_layers.embedding_size, self.embeddings.num_embeddings
         )
 
     @classmethod
-    def create_from_config(
-        cls,
-        max_seq_length: int,
-        embedding_size,
-        num_of_vocabulary: int,
-        num_of_encoders: int,
-    ) -> "MLM":
-        embeddings_layer = nn.Embedding(num_of_vocabulary, embedding_size)
+    def from_config(cls, config: MLMConfig) -> "MLM":
+        embeddings_layer = nn.Embedding(config.num_of_vocabulary, config.embedding_size)
         positional_embeddings_layer = SinusoidalPositionalEmbeddings(
-            max_seq_length, embedding_size
+            config.max_seq_length, config.embedding_size
         )
-        encoder_block = EncoderBlock(max_seq_length, embedding_size, num_of_encoders)
+        encoder_block = EncoderOrDecoderLayers.from_config(config.encoder_config)
         return cls(embeddings_layer, positional_embeddings_layer, encoder_block)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -50,5 +65,5 @@ class MLM(nn.Module):
         positional_embeddings = self.positional_embeddings()
 
         embeddings = embeddings + positional_embeddings
-        embeddings = self.encoder_block(embeddings)
+        embeddings = self.encoder_layers(embeddings)
         return self.header(embeddings)

@@ -7,15 +7,9 @@ from tasks.causal_language_modeling.models import CLMConfig
 from tasks.causal_language_modeling.models import NextToken
 from tasks.causal_language_modeling.trainer import NextTokenTrainer
 from tasks.causal_language_modeling.trainer import padding_sequence
-from tests.utils import is_tensor_equal
+from tests.utils import is_tensor_equal, create_sentence_with_tokens
 
 torch.manual_seed(123)
-
-
-def create_sentence_with_tokens(
-    num_of_vocabulary: int, max_seq_length: int
-) -> torch.Tensor:
-    return torch.randint(0, num_of_vocabulary - 1, (max_seq_length,))
 
 
 def test_padding_sequence() -> None:

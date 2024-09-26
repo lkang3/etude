@@ -4,6 +4,7 @@ import torch
 from tasks.causal_language_modeling.models import CLMConfig
 from tasks.causal_language_modeling.models import DecoderOnlyTransformer
 from tasks.causal_language_modeling.models import NextToken
+from tests.utils import is_normalized
 
 
 class TestDecoderOnlyTransformer:
@@ -39,4 +40,5 @@ class TestNextToken:
         inputs = torch.randint(0, num_of_vocabulary - 1, (max_seq_length,))
         outputs = model(inputs)
 
+        assert is_normalized(outputs)
         assert outputs.shape == (1, num_of_vocabulary)

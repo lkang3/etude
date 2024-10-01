@@ -5,10 +5,10 @@ import torch
 
 from transformers.models import EncoderAndDecoderLayer
 from transformers.models import EncoderAndDecoderLayers
+from transformers.models import EncoderOrDecoderConfig
 from transformers.models import EncoderOrDecoderLayer
 from transformers.models import EncoderOrDecoderLayers
-from transformers.models import TransformerConfig
-from transformers.models import TransformerType
+from transformers.models import EncoderOrDecoderType
 
 torch.manual_seed(123)
 
@@ -16,13 +16,13 @@ torch.manual_seed(123)
 class TestEncoderOrDecoderLayer:
     @pytest.mark.parametrize(
         "layer_type",
-        [TransformerType.DECODER, TransformerType.ENCODER],
+        [EncoderOrDecoderType.DECODER, EncoderOrDecoderType.ENCODER],
         ids=str,
     )
-    def test_forward(self, layer_type: TransformerType) -> None:
+    def test_forward(self, layer_type: EncoderOrDecoderType) -> None:
         embedding_size = 5
         seq_length = 4
-        config = TransformerConfig(
+        config = EncoderOrDecoderConfig(
             type=layer_type,
             source_seq_length=seq_length,
             target_seq_length=seq_length,
@@ -39,14 +39,16 @@ class TestEncoderOrDecoderLayer:
 class TestEncoderOrDecoderLayers:
     @pytest.mark.parametrize(
         "layer_type",
-        [TransformerType.DECODER, TransformerType.ENCODER],
+        [EncoderOrDecoderType.DECODER, EncoderOrDecoderType.ENCODER],
         ids=str,
     )
     @pytest.mark.parametrize("num_of_layers", [1, 2], ids=str)
-    def test_forward(self, layer_type: TransformerType, num_of_layers: int) -> None:
+    def test_forward(
+        self, layer_type: EncoderOrDecoderType, num_of_layers: int
+    ) -> None:
         embedding_size = 5
         seq_length = 4
-        config = TransformerConfig(
+        config = EncoderOrDecoderConfig(
             type=layer_type,
             source_seq_length=seq_length,
             target_seq_length=seq_length,
@@ -67,8 +69,8 @@ class TestEncoderAndDecoderLayer:
     def test_forward(self, embedding_size: int) -> None:
         source_seq_length = 4
         target_seq_length = 3
-        config = TransformerConfig(
-            type=TransformerType.HYBRID,
+        config = EncoderOrDecoderConfig(
+            type=EncoderOrDecoderType.HYBRID,
             source_seq_length=source_seq_length,
             target_seq_length=target_seq_length,
             embedding_size=embedding_size,
@@ -89,8 +91,8 @@ class TestEncoderAndDecoderLayers:
         embedding_size = 5
         source_seq_length = 4
         target_seq_length = 3
-        config = TransformerConfig(
-            type=TransformerType.HYBRID,
+        config = EncoderOrDecoderConfig(
+            type=EncoderOrDecoderType.HYBRID,
             source_seq_length=source_seq_length,
             target_seq_length=target_seq_length,
             embedding_size=embedding_size,

@@ -6,8 +6,9 @@ import torch
 from tasks.causal_language_modeling.models import CLMConfig
 from tasks.causal_language_modeling.models import NextToken
 from tasks.causal_language_modeling.trainer import NextTokenTrainer
-from tasks.causal_language_modeling.trainer import padding_sequence
-from tests.utils import is_tensor_equal, create_sentence_with_tokens
+from tasks.utils import padding_sequence
+from tests.utils import create_sentence_with_tokens
+from tests.utils import is_tensor_equal
 
 torch.manual_seed(123)
 

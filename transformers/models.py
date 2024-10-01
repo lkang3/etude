@@ -17,15 +17,15 @@ from transformers.utils import residual_connection
 TypeAttention = TypeVar("TypeAttention", bound=BaseAttention)
 
 
-class TransformerType(Enum):
+class EncoderOrDecoderType(Enum):
     DECODER = auto
     ENCODER = auto
     HYBRID = auto
 
 
 @dataclass
-class TransformerConfig:
-    type: TransformerType
+class EncoderOrDecoderConfig:
+    type: EncoderOrDecoderType
     source_seq_length: int
     target_seq_length: int
     embedding_size: int
@@ -39,16 +39,16 @@ class TransformerConfig:
 def create_attention_layer(
     max_seq_size: int,
     embedding_size: int,
-    transformer_type: TransformerType,
+    transformer_type: EncoderOrDecoderType,
 ) -> TypeAttention:
-    if transformer_type == TransformerType.DECODER:
+    if transformer_type == EncoderOrDecoderType.DECODER:
         return VanillaAttentionForDecoder(
             embedding_size=embedding_size,
             output_embedding_size=embedding_size,
             source_sequence_size=max_seq_size,
             query_sequence_size=max_seq_size,
         )
-    if transformer_type == TransformerType.ENCODER:
+    if transformer_type == EncoderOrDecoderType.ENCODER:
         return VanillaAttentionForEncoder(
             embedding_size=embedding_size,
             output_embedding_size=embedding_size,
@@ -79,7 +79,7 @@ class EncoderOrDecoderLayer(nn.Module):
         self.drop_out_after_mlp = drop_out_after_mlp
 
     @classmethod
-    def from_config(cls, config: TransformerConfig) -> "EncoderOrDecoderLayer":
+    def from_config(cls, config: EncoderOrDecoderConfig) -> "EncoderOrDecoderLayer":
         attention = create_attention_layer(
             config.max_seq_length,
             config.embedding_size,
@@ -101,7 +101,7 @@ class EncoderOrDecoderLayer(nn.Module):
         )
 
     @classmethod
-    def create_block(cls, config: TransformerConfig) -> nn.ModuleList:
+    def create_block(cls, config: EncoderOrDecoderConfig) -> nn.ModuleList:
         return nn.ModuleList([cls.from_config(config)] * config.num_of_layers)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -131,7 +131,7 @@ class EncoderOrDecoderLayers(nn.Module):
         self.layers = layers
 
     @classmethod
-    def from_config(cls, config: TransformerConfig) -> "EncoderOrDecoderLayers":
+    def from_config(cls, config: EncoderOrDecoderConfig) -> "EncoderOrDecoderLayers":
         return cls(
             config.max_seq_length,
             config.embedding_size,
@@ -175,7 +175,7 @@ class EncoderAndDecoderLayer(nn.Module):
         self.drop_out_after_mlp = drop_out_after_mlp
 
     @classmethod
-    def from_config(cls, config: TransformerConfig) -> "EncoderAndDecoderLayer":
+    def from_config(cls, config: EncoderOrDecoderConfig) -> "EncoderAndDecoderLayer":
         decoder_input_attention = VanillaAttentionForDecoder(
             embedding_size=config.embedding_size,
             output_embedding_size=config.embedding_size,
@@ -214,7 +214,7 @@ class EncoderAndDecoderLayer(nn.Module):
         )
 
     @classmethod
-    def create_block(cls, config: TransformerConfig) -> nn.ModuleList:
+    def create_block(cls, config: EncoderOrDecoderConfig) -> nn.ModuleList:
         return nn.ModuleList([cls.from_config(config)] * config.num_of_layers)
 
     def forward(
@@ -257,7 +257,7 @@ class EncoderAndDecoderLayers(nn.Module):
         self.layers = layers
 
     @classmethod
-    def from_config(cls, config: TransformerConfig) -> "EncoderAndDecoderLayers":
+    def from_config(cls, config: EncoderOrDecoderConfig) -> "EncoderAndDecoderLayers":
         return cls(
             config.max_seq_length,
             config.embedding_size,

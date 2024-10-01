@@ -41,12 +41,12 @@ class BaseAttention(nn.Module):
         assert key.shape[0] == value.shape[0] == self.source_sequence_size, (
             key.shape,
             value.shape,
-            query.shape,
+            self.source_sequence_size,
         )
         assert query.shape[0] == self.query_sequence_size, query.shape
         assert (
             key.shape[-1] == value.shape[-1] == query.shape[-1] == self.embedding_size
-        ), (key.shape, value.shape, query.shape)
+        ), (key.shape, value.shape, query.shape, self.embedding_size)
 
     def calculate_attention_scores(
         self,

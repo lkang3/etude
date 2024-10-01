@@ -4,9 +4,9 @@ import torch
 from torch import nn
 
 from positional_embeddings.models import SinusoidalPositionalEmbeddings
+from transformers.models import EncoderOrDecoderConfig
 from transformers.models import EncoderOrDecoderLayers
-from transformers.models import TransformerConfig
-from transformers.models import TransformerType
+from transformers.models import EncoderOrDecoderType
 
 
 @dataclass
@@ -49,8 +49,8 @@ class DecoderOnlyTransformer(nn.Module):
             config.max_seq_length,
             embedding_size,
         )
-        transformer_config = TransformerConfig(
-            type=TransformerType.DECODER,
+        transformer_config = EncoderOrDecoderConfig(
+            type=EncoderOrDecoderType.DECODER,
             source_seq_length=config.max_seq_length,
             target_seq_length=config.max_seq_length,
             embedding_size=embedding_size,

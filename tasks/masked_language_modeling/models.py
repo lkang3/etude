@@ -1,11 +1,12 @@
-import torch
 from dataclasses import dataclass
+
+import torch
 from torch import nn
 
 from positional_embeddings.models import SinusoidalPositionalEmbeddings
+from transformers.models import EncoderOrDecoderConfig
 from transformers.models import EncoderOrDecoderLayers
-from transformers.models import TransformerConfig
-from transformers.models import TransformerType
+from transformers.models import EncoderOrDecoderType
 
 
 @dataclass
@@ -16,9 +17,9 @@ class MLMConfig:
     num_of_encoder_layers: int
 
     @property
-    def encoder_config(self) -> TransformerConfig:
-        return TransformerConfig(
-            TransformerType.ENCODER,
+    def encoder_config(self) -> EncoderOrDecoderConfig:
+        return EncoderOrDecoderConfig(
+            EncoderOrDecoderType.ENCODER,
             self.max_seq_length,
             self.max_seq_length,
             self.embedding_size,

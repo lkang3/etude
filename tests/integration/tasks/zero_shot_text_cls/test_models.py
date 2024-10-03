@@ -27,7 +27,7 @@ class TestZeroShotTextClassifier:
         source_sentence = torch.randint(
             0, num_of_shared_vocabularies - 1, (max_source_seq_length,)
         )
-        # example
+        # example (total num of class_* and pad is max_target_options)
         # "class_1[SEP]class_2[SEP]...[SEP]class_n[SPE]pad[SEP]...[SEP]"
         target_sentence = torch.randint(
             0, num_of_shared_vocabularies - 1, (max_target_seq_length,)

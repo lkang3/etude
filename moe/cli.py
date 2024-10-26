@@ -9,7 +9,7 @@ from moe.models import Expert
 from moe.models import Gate
 from moe.models import MoETopX
 from moe.models import MoEWeightedAverage
-from moe.models import Trainer
+from trainer.models import Trainer
 
 
 @click.group()

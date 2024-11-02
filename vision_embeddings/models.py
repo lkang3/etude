@@ -25,7 +25,11 @@ class VisionEmbeddingWithNonOverlappingSquarePatch(nn.Module):
     def get_num_of_patches(self) -> int:
         return (self.image_size // self.image_patch_size) ** 2
 
-    def restructure_with_patches(self, data) -> torch.Tensor:
+    @staticmethod
+    def prioritize_patch_dimension(data) -> torch.Tensor:
+        return data.permute(-1, -2)
+
+    def separate_input_embedding_dimension(self, data) -> torch.Tensor:
         return data.view(
             self.num_of_patches,
             self.image_patch_size * self.image_patch_size,
@@ -33,6 +37,11 @@ class VisionEmbeddingWithNonOverlappingSquarePatch(nn.Module):
         )
 
     def forward(self, data: torch.Tensor) -> torch.Tensor:
+        # size: (input_embedding_size * (image_patch_size * image_patch_size) , num_of_patches)
         patches = self.patcher(data)
-        patches = self.restructure_with_patches(patches)
-        return self.mlp(patches)
+        # size: (num_of_patches, input_embedding_size * (image_patch_size * image_patch_size))
+        patches = self.prioritize_patch_dimension(patches)
+        # size: (num_of_patches, image_patch_size * image_patch_size, input_embedding_size)
+        patches = self.separate_input_embedding_dimension(patches)
+        # return self.mlp(patches)
+        return patches

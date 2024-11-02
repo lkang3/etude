@@ -1,7 +1,9 @@
 import torch
 
+from tests.utils import create_multi_channel_image_data
 from vision_embeddings.models import \
     VisionEmbeddingWithNonOverlappingSquarePatch
+
 
 torch.manual_seed(123)
 
@@ -10,7 +12,7 @@ class TestVisionEmbeddingWithNonOverlappingSquarePatch:
     def test_forward(self) -> None:
         num_of_channels = 3
         image_size = 4
-        input_data = torch.rand(num_of_channels, image_size, image_size)
+        input_data = create_multi_channel_image_data(num_of_channels, image_size, image_size)
         output_embedding_size = 17
         patch_size = 2
         model = VisionEmbeddingWithNonOverlappingSquarePatch(

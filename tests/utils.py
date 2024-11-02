@@ -21,3 +21,12 @@ def create_sentence_with_tokens(
     num_of_vocabulary: int, max_seq_length: int
 ) -> torch.Tensor:
     return torch.randint(0, num_of_vocabulary - 1, (max_seq_length,))
+
+
+def create_multi_channel_image_data(num_of_channels: int, height: int, width: int) -> torch.Tensor:
+    data = []
+    for i in range(1, num_of_channels+1):
+        image_layer = torch.arange(height * width).view(height, width) * i
+        data.append(image_layer)
+
+    return torch.stack(data).float()

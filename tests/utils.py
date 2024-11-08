@@ -1,4 +1,8 @@
+from dataclasses import fields
+from unittest.mock import Mock
+
 import torch
+
 
 
 def is_scalar(data: torch.Tensor) -> bool:
@@ -30,3 +34,12 @@ def create_multi_channel_image_data(num_of_channels: int, height: int, width: in
         data.append(image_layer)
 
     return torch.stack(data).float()
+
+
+def create_dataclass_mock(data_class_object: object) -> Mock():
+    data_class_fields = [field for field in fields(data_class_object)]
+    data_class_field_names = {field.name for field in data_class_fields}
+    data_class_attributes = [attr for attr in dir(data_class_object) if attr not in data_class_field_names]
+    spec = data_class_fields
+    spec.extend(data_class_attributes)
+    return Mock(sepc=spec)

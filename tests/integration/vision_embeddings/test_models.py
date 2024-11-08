@@ -82,7 +82,7 @@ class TestDummyConv:
         kernel_height = 2
         kernel_width = 2
         kernel_stride = 2
-        conv_schema = DummyConv.get_conv_metadata(
+        conv_metadata = DummyConv.get_conv_metadata(
             image_height,
             image_width,
             kernel_height,
@@ -90,9 +90,9 @@ class TestDummyConv:
             kernel_stride,
         )
 
-        assert isinstance(conv_schema, ConvMetadata)
-        assert conv_schema.output_size == ImageSize(2, 2)
-        assert len(conv_schema.data_patch_metadata) == 4
+        assert isinstance(conv_metadata, ConvMetadata)
+        assert conv_metadata.output_size == ImageSize(2, 2)
+        assert len(conv_metadata.data_patch_metadata) == 4
 
     def test_forward(self) -> None:
         image_size = ImageSize(4, 4)

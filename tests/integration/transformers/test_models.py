@@ -30,7 +30,8 @@ class TestEncoderOrDecoderLayer:
             num_of_layers=Mock(),
         )
         model = EncoderOrDecoderLayer.from_config(config)
-        inputs = torch.rand(seq_length, embedding_size)
+        batch_size = 3
+        inputs = torch.rand(batch_size, seq_length, embedding_size)
         outputs = model(inputs)
 
         assert outputs.shape == inputs.shape
@@ -57,7 +58,8 @@ class TestEncoderOrDecoderLayers:
         )
 
         model = EncoderOrDecoderLayers.from_config(config)
-        inputs = torch.rand(seq_length, embedding_size)
+        batch_size = 3
+        inputs = torch.rand(batch_size, seq_length, embedding_size)
         outputs = model(inputs)
 
         assert len(model.layers) == num_of_layers
@@ -77,8 +79,9 @@ class TestEncoderAndDecoderLayer:
             num_of_layers=Mock(),
         )
         model = EncoderAndDecoderLayer.from_config(config)
-        encoder_inputs = torch.rand(source_seq_length, embedding_size)
-        decoder_inputs = torch.rand(target_seq_length, embedding_size)
+        batch_size = 3
+        encoder_inputs = torch.rand(batch_size, source_seq_length, embedding_size)
+        decoder_inputs = torch.rand(batch_size, target_seq_length, embedding_size)
 
         outputs = model(decoder_inputs, encoder_inputs)
 
@@ -100,8 +103,9 @@ class TestEncoderAndDecoderLayers:
         )
 
         model = EncoderAndDecoderLayers.from_config(config)
-        encoder_inputs = torch.rand(source_seq_length, embedding_size)
-        decoder_inputs = torch.rand(target_seq_length, embedding_size)
+        batch_size = 3
+        encoder_inputs = torch.rand(batch_size, source_seq_length, embedding_size)
+        decoder_inputs = torch.rand(batch_size, target_seq_length, embedding_size)
         outputs = model(decoder_inputs, encoder_inputs)
 
         assert len(model.layers) == num_of_layers

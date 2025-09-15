@@ -84,7 +84,7 @@ class AttentionScores:
         token_sequences = torch.ones(3, 16)
         scores.unsequeeze(-1) * token_sequences
         """
-        return torch.mean(
+        return torch.sum(
             self.scores.unsqueeze(-1)
             * source_token_sequences[self.source_seq_token_ids, :],
             dim=0,

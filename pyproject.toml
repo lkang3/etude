@@ -1,29 +1,21 @@
-[tool.poetry]
+[project]
 name = "etude"
 version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+description = "Lyndon Kang's etude repo"
 readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.2.1",
+    "numpy>=2.3.2",
+    "torch>=2.8.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-torch = "^2.4.0"
-numpy = "^2.0.1"
-opencv-python = "^4.10.0.84"
-
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.2"
-click = "^8.1.7"
-black = "^24.8.0"
-isort = "^5.13.2"
-mypy = "^1.11.2"
-pre-commit = "^3.8.0"
-pylint = "^3.2.7"
-
-[tool.poetry.scripts]
-test-cli = "etude_moe.cli:cli"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "isort>=6.0.1",
+    "mypy>=1.17.1",
+    "pre-commit>=4.3.0",
+    "pylint>=3.3.8",
+    "pytest>=8.4.2",
+]

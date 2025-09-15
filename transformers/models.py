@@ -18,9 +18,9 @@ TypeAttention = TypeVar("TypeAttention", bound=BaseAttention)
 
 
 class EncoderOrDecoderType(Enum):
-    DECODER = auto
-    ENCODER = auto
-    HYBRID = auto
+    DECODER = auto()
+    ENCODER = auto()
+    HYBRID = auto()
 
 
 @dataclass

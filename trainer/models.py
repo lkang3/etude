@@ -24,7 +24,9 @@ class Trainer:
 
     @staticmethod
     def get_end_index_of_samples_in_one_batch(
-        total_samples: int, batch_size: int, start_index_of_current_batch: int,
+        total_samples: int,
+        batch_size: int,
+        start_index_of_current_batch: int,
     ) -> int:
         return min(total_samples, start_index_of_current_batch + batch_size)
 
@@ -36,26 +38,30 @@ class Trainer:
         sample_end_index: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         return (
-            inputs[sample_start_index: sample_end_index],
-            targets[sample_start_index: sample_end_index],
+            inputs[sample_start_index:sample_end_index],
+            targets[sample_start_index:sample_end_index],
         )
 
-    def train_with_one_epoch(self, inputs: torch.Tensor, expected_outputs: torch.Tensor) -> None:
+    def train_with_one_epoch(
+        self, inputs: torch.Tensor, expected_outputs: torch.Tensor
+    ) -> None:
         num_of_samples = inputs.shape[0]
         for batch_start_idx in range(0, num_of_samples, self.batch_size):
             batch_end_idx = self.get_end_index_of_samples_in_one_batch(
-                num_of_samples, self.batch_size, batch_start_idx,
+                num_of_samples,
+                self.batch_size,
+                batch_start_idx,
             )
-            (
-                batch_inputs,
-                expected_batch_outputs
-            ) = self.get_train_inputs_of_one_epoch(
-                inputs, expected_outputs, batch_start_idx, batch_end_idx,
+            (batch_inputs, expected_batch_outputs) = self.get_train_inputs_of_one_epoch(
+                inputs,
+                expected_outputs,
+                batch_start_idx,
+                batch_end_idx,
             )
             self.optimizer.zero_grad()
             batch_outputs = self.model(batch_inputs)
-            loss_expert1 = self.loss_func(batch_outputs, expected_batch_outputs)
-            loss_expert1.backward()
+            loss = self.loss_func(batch_outputs, expected_batch_outputs)
+            loss.backward()
             self.optimizer.step()
 
     def train(self, inputs: torch.Tensor, expected_outputs: torch.Tensor) -> nn.Module:
@@ -65,7 +71,9 @@ class Trainer:
 
     @torch.no_grad()
     def evaluate(
-        self, inputs: torch.Tensor, expected_outputs: torch.Tensor,
+        self,
+        inputs: torch.Tensor,
+        expected_outputs: torch.Tensor,
     ) -> torch.Tensor:
         self.model.eval()
         outputs = self.model(inputs)

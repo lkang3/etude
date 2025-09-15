@@ -1,11 +1,12 @@
-from enum import Enum, auto
+from enum import Enum
+from enum import auto
 from typing import Optional
 
 import torch
 from torch import nn
 
-from tasks.similarity_learning.entities import ContrastiveOutput
-from tasks.similarity_learning.entities import TripletOutput
+from tasks.contrastive_learning.entities import ContrastiveOutput
+from tasks.contrastive_learning.entities import TripletOutput
 
 
 class ContrastiveLoss(nn.Module):
@@ -15,13 +16,13 @@ class ContrastiveLoss(nn.Module):
 
     def forward(self, contrastive_output: ContrastiveOutput) -> torch.Tensor:
         distance = contrastive_output.distance
-        is_positive_pair = torch.Tensor(not contrastive_output.is_contrastive).long()
+        is_positive_pair = torch.Tensor(
+            not contrastive_output.is_negative_input_pairs
+        ).long()
 
-        return (
-            is_positive_pair * torch.pow(distance, 2)
-            + (1 - is_positive_pair)
-            * torch.pow(torch.max(torch.tensor(0.0), self.margin - distance), 2)
-        )
+        return is_positive_pair * torch.pow(distance, 2) + (
+            1 - is_positive_pair
+        ) * torch.pow(torch.max(torch.tensor(0.0), self.margin - distance), 2)
 
 
 class TripletLoss(nn.Module):
@@ -36,7 +37,7 @@ class TripletLoss(nn.Module):
                 - torch.pow(triplet_output.contrastive_distance, 2)
                 + self.margin
             ),
-            torch.tensor(0.0)
+            torch.tensor(0.0),
         )
 
 
@@ -48,6 +49,6 @@ class LossType(Enum):
     def create_loss_func(cls, loss_type: "LossType") -> nn.Module:
         if loss_type == cls.CONTRASTIVE:
             return ContrastiveLoss()
-        elif loss_type == cls.TRIPLET:
+        if loss_type == cls.TRIPLET:
             return TripletLoss()
         raise ValueError(f"Only {list(cls)} is supported")

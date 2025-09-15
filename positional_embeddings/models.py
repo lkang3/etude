@@ -30,8 +30,8 @@ class BaseUnlearnablePositionEmbedding(nn.Module):
     def get_embedding(self) -> torch.Tensor:
         raise NotImplementedError()
 
-    def forward(self) -> torch.Tensor:
-        return self.get_embedding()
+    def forward(self, positional_index_batch: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError()
 
 
 class BasePositionalEmbedding(nn.Module):
@@ -182,8 +182,20 @@ class SinusoidalPositionalEmbeddings(BaseUnlearnablePositionEmbedding):
         )
         return positional_embeddings
 
-    def forward(self) -> torch.Tensor:
-        return self.get_embedding()
+    def forward_one_patch(
+        self, single_batch: torch.IntTensor | torch.LongTensor
+    ) -> torch.Tensor:
+        return torch.index_select(self.position_embedding, 0, single_batch)
+
+    def forward(
+        self, positional_index_batch: torch.IntTensor | torch.LongTensor
+    ) -> torch.Tensor:
+        batch_num = positional_index_batch.shape[0]
+        outputs = torch.zeros(batch_num, self.position_size, self.embedding_size)
+        for batch_index, single_batch in enumerate(positional_index_batch):
+            outputs[batch_index] = self.forward_one_patch(single_batch)
+
+        return outputs
 
 
 class RotaryPositionalEmbeddings(BaseUnlearnablePositionEmbedding):

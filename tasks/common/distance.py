@@ -1,4 +1,5 @@
-from enum import Enum, auto
+from enum import Enum
+from enum import auto
 from typing import TypeVar
 
 import torch
@@ -37,7 +38,9 @@ class DistanceType(Enum):
     L2 = auto()
 
     @classmethod
-    def create_contrastive_layer(cls, distance_type: "DistanceType") -> TypeDistanceLayer:
+    def create_contrastive_layer(
+        cls, distance_type: "DistanceType"
+    ) -> TypeDistanceLayer:
         if distance_type == cls.L1:
             return L1DistanceLayer()
         elif distance_type == cls.L2:

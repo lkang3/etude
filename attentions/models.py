@@ -69,7 +69,7 @@ class BaseAttention(nn.Module):
 
         return outputs
 
-    def forward(
+    def forward_single_batch(
         self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor
     ) -> torch.Tensor:
         self.validate_inputs(key, value, query)
@@ -79,6 +79,21 @@ class BaseAttention(nn.Module):
 
         attention_scores = self.calculate_attention_scores(key, query)
         return self.apply_attention_scores(attention_scores, value)
+
+    def forward(
+        self, key: torch.Tensor, value: torch.Tensor, query: torch.Tensor
+    ) -> torch.Tensor:
+        outputs = []
+        for key_single_batch, value_single_batch, query_single_batch in zip(
+            key, value, query
+        ):
+            outputs.append(
+                self.forward_single_batch(
+                    key_single_batch, value_single_batch, query_single_batch
+                )
+            )
+
+        return torch.stack(outputs)
 
 
 class VanillaAttentionForEncoder(BaseAttention):
